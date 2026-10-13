@@ -110,6 +110,8 @@ def jsonld(lang, description):
         "image": BASE + "/img/og.jpg",
         "email": "contact@chaos-eng.com",
         "description": description,
+        "address": {"@type": "PostalAddress", "streetAddress": "224 rue des Pyrénées",
+                    "postalCode": "75020", "addressLocality": "Paris", "addressCountry": "FR"},
         "founder": {"@type": "Person", "name": "Justin Dirrenberger",
                     "sameAs": ["https://www.linkedin.com/in/justindirrenberger/"]},
     }
