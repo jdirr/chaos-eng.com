@@ -261,7 +261,7 @@ def main():
     write("sitemap.xml", sitemap())
     write("robots.txt", f"User-agent: *\nAllow: /\n\nSitemap: {BASE}/sitemap.xml\n")
     if not ROOT_PATH:
-        write("CNAME", DOMAIN + "\n")
+        write("CNAME", DOMAIN)  # same format as the file GitHub writes
     write(".nojekyll", "")
     check()
     n = sum(1 for _ in OUT.rglob("*.html"))
