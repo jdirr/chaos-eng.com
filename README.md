@@ -8,7 +8,11 @@ Site of Chaos Engineering, bilingual (FR at `/`, EN at `/en/`), static, served b
 python tools/lattice.py   # only when the hero lattice, social image or favicons change (numpy, scipy, Pillow)
 python build.py           # regenerate docs/ (standard library only)
 python build.py --release # same, but fails on placeholders, broken links, em dashes
+python build.py --release --preview-path chaos-eng.com
+                          # for the provisional address jdirr.github.io/chaos-eng.com (no CNAME, noindex)
 ```
+
+Deploy: commit `docs/` and push `main`; GitHub Pages publishes `main:/docs`.
 
 Preview: `python -m http.server 8765 --directory docs`, then http://127.0.0.1:8765/.
 
@@ -23,5 +27,4 @@ Preview: `python -m http.server 8765 --directory docs`, then http://127.0.0.1:87
 
 ## Open items
 
-- Legal notice: legal form, SIRET and address (`content/*/legal.html`, marked `todo`).
 - DNS switch from WordPress.com hosting to GitHub Pages: keep the MX record (`smtp-fwd.wordpress.com`), which forwards contact@.

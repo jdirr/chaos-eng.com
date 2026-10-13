@@ -3,6 +3,9 @@
 Usage:
   python build.py            build, report warnings
   python build.py --release  build, fail on any warning (placeholders, broken links, style)
+  python build.py --preview-path chaos-eng.com
+                             build for the provisional address jdirr.github.io/chaos-eng.com:
+                             links prefixed, no CNAME, pages marked noindex
 """
 import hashlib
 import json
@@ -53,10 +56,15 @@ STRINGS = {
 }
 
 warnings = []
+ROOT_PATH = ""  # URL prefix; empty on chaos-eng.com, "/chaos-eng.com" on the provisional address
 
 
 def url(key, lang):
-    return "/" + PAGES[key][lang]
+    return ROOT_PATH + "/" + PAGES[key][lang]
+
+
+def canon(key, lang):
+    return BASE + "/" + PAGES[key][lang]
 
 
 def read_page(path):
@@ -84,7 +92,7 @@ def expand(html, lang):
     partials = ROOT / "templates" / "partials"
     html = re.sub(r"\{\{>\s*([\w-]+)\s*\}\}", lambda m: (partials / f"{m.group(1)}.svg").read_text(encoding="utf-8").strip(), html)
     html = re.sub(r"\{\{url:(\w+)\}\}", lambda m: url(m.group(1), lang), html)
-    return html
+    return html.replace("{{root}}", ROOT_PATH)
 
 
 def esc(s):
@@ -105,7 +113,7 @@ def jsonld(lang, description):
         "@context": "https://schema.org",
         "@type": "ProfessionalService",
         "name": "Chaos Engineering",
-        "url": BASE + url("home", lang),
+        "url": canon("home", lang),
         "logo": BASE + "/img/logo-512.png",
         "image": BASE + "/img/og.jpg",
         "email": "contact@chaos-eng.com",
@@ -126,7 +134,6 @@ def build_page(tpl, key, lang, version):
     body = expand(body, lang)
     s = STRINGS[lang]
     alt = "en" if lang == "fr" else "fr"
-    here = url(key, lang)
 
     def nav_link(label, k, frag, cls=""):
         cur = ' aria-current="page"' if k == key and not frag and k != "home" else ""
@@ -138,12 +145,13 @@ def build_page(tpl, key, lang, version):
                f'title="{s["alt_name"]}">{s["alt_short"]}</a>')
     footer = [f'        <li><a href="{url(k, lang)}{f}">{l}</a></li>' for l, k, f in s["footer"]]
     alternates = "\n".join(
-        [f'<link rel="alternate" hreflang="{lg}" href="{BASE}{url(key, lg)}">' for lg in ("fr", "en")]
-        + [f'<link rel="alternate" hreflang="x-default" href="{BASE}{url(key, "fr")}">'])
+        [f'<link rel="alternate" hreflang="{lg}" href="{canon(key, lg)}">' for lg in ("fr", "en")]
+        + [f'<link rel="alternate" hreflang="x-default" href="{canon(key, "fr")}">']
+        + (['<meta name="robots" content="noindex">'] if ROOT_PATH else []))
     ctx = {
         **{k: v for k, v in s.items() if k.startswith("t_") or k in ("og_locale", "alt_name")},
         "lang": lang, "title": esc(meta["title"]), "og_title": esc(meta["title"].split(" | ")[0]),
-        "description": esc(meta["description"]), "canonical": BASE + here, "base": BASE,
+        "description": esc(meta["description"]), "canonical": canon(key, lang), "base": BASE, "root": ROOT_PATH,
         "alternates": alternates, "version": version, "page_class": f"page-{key}",
         "home_url": url("home", lang), "legal_url": url("legal", lang),
         "alt_url": url(key, alt), "alt_lang": alt,
@@ -159,13 +167,13 @@ def build_404(tpl, version):
     body = expand(french_typography(body), "fr")
     s = STRINGS["fr"]
     nav = [f'      <a href="{url(k, "fr")}{f}"{" class=\"cta\"" if k == "contact" else ""}>{l}</a>' for l, k, f in s["nav"]]
-    nav.append('      <a class="lang" href="/en/" hreflang="en" lang="en" title="English version">EN</a>')
+    nav.append(f'      <a class="lang" href="{ROOT_PATH}/en/" hreflang="en" lang="en" title="English version">EN</a>')
     ctx = {
         **{k: v for k, v in s.items() if k.startswith("t_") or k in ("og_locale", "alt_name")},
         "lang": "fr", "title": esc(meta["title"]), "og_title": "Chaos Engineering",
-        "description": esc(meta["description"]), "canonical": BASE + "/", "base": BASE,
+        "description": esc(meta["description"]), "canonical": BASE + "/", "base": BASE, "root": ROOT_PATH,
         "alternates": '<meta name="robots" content="noindex">', "version": version, "page_class": "page-404",
-        "home_url": "/", "legal_url": url("legal", "fr"), "alt_url": "/en/", "alt_lang": "en",
+        "home_url": ROOT_PATH + "/", "legal_url": url("legal", "fr"), "alt_url": ROOT_PATH + "/en/", "alt_lang": "en",
         "nav": "\n".join(nav),
         "footer_nav": "\n".join(f'        <li><a href="{url(k, "fr")}{f}">{l}</a></li>' for l, k, f in s["footer"]),
         "jsonld": "", "content": body.strip(), "year": date.today().year,
@@ -176,8 +184,8 @@ def build_404(tpl, version):
 def redirect_page(target):
     return (f'<!doctype html><html lang="fr"><head><meta charset="utf-8">'
             f'<title>Chaos Engineering</title><meta name="robots" content="noindex">'
-            f'<link rel="canonical" href="{BASE}{target}"><meta http-equiv="refresh" content="0; url={target}">'
-            f'</head><body><p><a href="{target}">{BASE}{target}</a></p></body></html>\n')
+            f'<link rel="canonical" href="{BASE}{target}"><meta http-equiv="refresh" content="0; url={ROOT_PATH}{target}">'
+            f'</head><body><p><a href="{ROOT_PATH}{target}">{BASE}{target}</a></p></body></html>\n')
 
 
 def sitemap():
@@ -217,6 +225,11 @@ def check():
         if re.search(r"\bmaison\b", re.sub(r"<[^>]+>", " ", visible), re.I):
             warnings.append(f"{rel}: the word 'maison' found")
         for href in re.findall(r'(?:href|src)="(/[^"/][^"]*|/)"', html):
+            if ROOT_PATH:
+                if not href.startswith(ROOT_PATH + "/"):
+                    warnings.append(f"{rel}: link without {ROOT_PATH} prefix: {href}")
+                    continue
+                href = href[len(ROOT_PATH):]
             path, _, frag = href.partition("#")
             path = path.split("?")[0]
             target = (path.lstrip("/") + "index.html") if path.endswith("/") else path.lstrip("/")
@@ -230,7 +243,10 @@ def check():
 
 
 def main():
+    global ROOT_PATH
     release = "--release" in sys.argv
+    if "--preview-path" in sys.argv:
+        ROOT_PATH = "/" + sys.argv[sys.argv.index("--preview-path") + 1].strip("/")
     if OUT.exists():
         shutil.rmtree(OUT)
     shutil.copytree(ROOT / "static", OUT)
@@ -244,11 +260,12 @@ def main():
         write(old + "index.html", redirect_page(new))
     write("sitemap.xml", sitemap())
     write("robots.txt", f"User-agent: *\nAllow: /\n\nSitemap: {BASE}/sitemap.xml\n")
-    write("CNAME", DOMAIN + "\n")
+    if not ROOT_PATH:
+        write("CNAME", DOMAIN + "\n")
     write(".nojekyll", "")
     check()
     n = sum(1 for _ in OUT.rglob("*.html"))
-    print(f"built {n} pages into {OUT.relative_to(ROOT)}/")
+    print(f"built {n} pages into {OUT.relative_to(ROOT)}/" + (f" for {ROOT_PATH}/" if ROOT_PATH else ""))
     for w in warnings:
         print("WARNING:", w)
     if release and warnings:
